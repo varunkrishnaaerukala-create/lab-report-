@@ -1,0 +1,22 @@
+﻿{
+  "name": "lab-01",
+  "version": "1.0.0",
+  "description": "Lab 1: Node.js and Express Server - Backend Development Fundamentals",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js",
+    "plain-http": "node server.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "http-server",
+    "rest-api"
+  ],
+  "author": "A.VARUN KRISHNA",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
