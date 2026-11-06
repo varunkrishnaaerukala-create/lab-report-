@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Management Dashboard | Lab 3</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="logo-icon">📚</div>
+          <div>
+            <h1>Book Management Studio</h1>
+            <p class="subtitle">B.Tech 2nd Year &bull; Backend Fundamentals &bull; Lab 3 REST API</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span class="badge status-badge" id="apiStatusBadge">● API Online</span>
+          <button class="btn btn-primary" id="openAddModalBtn">+ Add New Book</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Notification Toast -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Main Content Layout -->
+    <main class="main-layout">
+      <!-- Filter & Controls Toolbar -->
+      <section class="card controls-card">
+        <div class="controls-grid">
+          <!-- Search Box -->
+          <div class="control-group search-group">
+            <label for="searchInput">Search Title</label>
+            <div class="input-with-icon">
+              <span class="input-icon">🔍</span>
+              <input type="text" id="searchInput" placeholder="Search by partial title (e.g. Atomic)..." />
+            </div>
+          </div>
+
+          <!-- Price Filter -->
+          <div class="control-group">
+            <label>Price Range (₹)</label>
+            <div class="price-inputs">
+              <input type="number" id="minPriceInput" placeholder="Min" min="0" />
+              <span class="price-separator">to</span>
+              <input type="number" id="maxPriceInput" placeholder="Max" min="0" />
+            </div>
+          </div>
+
+          <!-- Sorting Controls -->
+          <div class="control-group">
+            <label for="sortBySelect">Sort By</label>
+            <select id="sortBySelect">
+              <option value="id">ID (Default)</option>
+              <option value="title">Title</option>
+              <option value="author">Author</option>
+              <option value="price">Price</option>
+              <option value="created_at">Date Created</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="sortOrderSelect">Order</label>
+            <select id="sortOrderSelect">
+              <option value="ASC">Ascending (ASC)</option>
+              <option value="DESC">Descending (DESC)</option>
+            </select>
+          </div>
+
+          <!-- Page Size -->
+          <div class="control-group">
+            <label for="limitSelect">Per Page</label>
+            <select id="limitSelect">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="all">Show All</option>
+            </select>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="control-group action-group">
+            <label>&nbsp;</label>
+            <div class="button-row">
+              <button class="btn btn-secondary" id="applyFiltersBtn">Apply Filters</button>
+              <button class="btn btn-ghost" id="resetFiltersBtn">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Query Indicator -->
+        <div class="query-preview">
+          <span class="query-label">Active Request:</span>
+          <code id="activeQueryDisplay">GET /books</code>
+        </div>
+      </section>
+
+      <!-- Books Table Section -->
+      <section class="card table-card">
+        <div class="table-header-row">
+          <div>
+            <h2>Books Catalog</h2>
+            <p class="section-meta" id="resultSummary">Loading catalog...</p>
+          </div>
+          <div class="view-switch">
+            <button class="btn-icon active" id="viewTableBtn" title="Table View">☰</button>
+            <button class="btn-icon" id="viewCardsBtn" title="Cards View">☷</button>
+          </div>
+        </div>
+
+        <!-- Table View Container -->
+        <div class="table-responsive" id="tableView">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-id">ID</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Price (₹)</th>
+                <th>Created At</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="booksTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Card Grid View Container -->
+        <div class="cards-grid hidden" id="cardsView">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state hidden" id="emptyState">
+          <div class="empty-icon">📭</div>
+          <h3>No books found</h3>
+          <p>No books matched your filter criteria or the database is empty.</p>
+          <button class="btn btn-secondary" id="emptyResetBtn">Reset Filters</button>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-footer" id="paginationFooter">
+          <div class="pagination-info" id="paginationInfo">
+            Showing 0 to 0 of 0 books
+          </div>
+          <div class="pagination-buttons">
+            <button class="btn btn-ghost" id="prevPageBtn" disabled>&laquo; Previous</button>
+            <span class="page-indicator" id="pageIndicator">Page 1</span>
+            <button class="btn btn-ghost" id="nextPageBtn" disabled>Next &raquo;</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Add / Edit Modal -->
+    <div class="modal-backdrop hidden" id="bookModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modalTitle">Add New Book</h3>
+          <button class="close-btn" id="closeModalBtn">&times;</button>
+        </div>
+        <form id="bookForm">
+          <div class="modal-body">
+            <div id="modalErrorBox" class="alert alert-danger hidden"></div>
+
+            <input type="hidden" id="bookIdInput" />
+
+            <div class="form-group">
+              <label for="bookTitleInput">Book Title <span class="required">*</span></label>
+              <input type="text" id="bookTitleInput" placeholder="e.g. Atomic Habits" required />
+            </div>
+
+            <div class="form-group">
+              <label for="bookAuthorInput">Author <span class="required">*</span></label>
+              <input type="text" id="bookAuthorInput" placeholder="e.g. James Clear" required />
+            </div>
+
+            <div class="form-group">
+              <label for="bookPriceInput">Price (₹) <span class="required">*</span></label>
+              <input type="number" id="bookPriceInput" step="0.01" min="0" placeholder="e.g. 450.00" required />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" id="cancelModalBtn">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="saveBookBtn">Save Book</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-backdrop hidden" id="deleteModal">
+      <div class="modal modal-small">
+        <div class="modal-header">
+          <h3>Delete Book</h3>
+          <button class="close-btn" id="closeDeleteModalBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete <strong id="deleteBookTitle"></strong>?</p>
+          <p class="text-muted">This action will remove the record from SQLite database permanently.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="cancelDeleteBtn">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
