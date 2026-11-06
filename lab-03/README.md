@@ -23,7 +23,7 @@ Key system capabilities include:
 - **Comprehensive Validation:** Specialized middleware to validate incoming request bodies, route parameters, and query parameters before reaching service handlers.
 - **Standardized Response Contracts:** Consistent JSON envelope structure across all success responses and validation error arrays.
 
----
+--- live link :https://lab-report-1-0uj0.onrender.com/
 
 ## 3. Technologies Used
 - **Runtime Environment:** [Node.js](https://nodejs.org/) (v18+ / v20+)
