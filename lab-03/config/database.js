@@ -4,15 +4,16 @@
  * Database Configuration and Initialization Module
  * -------------------------------------------------
  * Responsibility:
- * 1. Establish SQLite database connection using 'sqlite3'.
+ * 1. Establish SQLite database connection using 'sql.js' (pure JS/WASM, no native compilation).
  * 2. Initialize the 'books' table schema if it does not exist.
  * 3. Seed initial 12 sample books if the table is empty.
  * 4. Export promisified query helpers (query, get, run) to enable clean
- *    async/await operations and avoid callback hell.
+ *    async/await operations used by services and controllers.
  * 5. Enforce parameterized queries to prevent SQL Injection vulnerabilities.
+ * 6. Auto-persist database changes to disk after every write operation.
  */
 
-const sqlite3 = require('sqlite3').verbose();
+const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
@@ -27,66 +28,123 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-// Create connection to SQLite database
-const db = new sqlite3.Database(dbFilePath, (err) => {
-  if (err) {
-    console.error(`[Database Error] Failed to connect to SQLite at ${dbFilePath}:`, err.message);
-  } else {
-    console.log(`[Database] Connected successfully to SQLite database: ${dbFilePath}`);
-  }
-});
+// Database instance holder (initialized asynchronously)
+let db = null;
 
 /**
- * Promisified helper for db.all (retrieves multiple rows)
+ * Save the in-memory database to disk
+ */
+function saveToDisk() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbFilePath, buffer);
+  }
+}
+
+/**
+ * Initialize sql.js and load or create the database
+ * @returns {Promise<void>}
+ */
+async function initSqlJsDatabase() {
+  const SQL = await initSqlJs();
+
+  // Load existing database file or create a new one
+  if (fs.existsSync(dbFilePath)) {
+    const fileBuffer = fs.readFileSync(dbFilePath);
+    db = new SQL.Database(fileBuffer);
+    console.log(`[Database] Connected successfully to SQLite database: ${dbFilePath}`);
+  } else {
+    db = new SQL.Database();
+    console.log(`[Database] Created new SQLite database: ${dbFilePath}`);
+    saveToDisk();
+  }
+}
+
+/**
+ * Promisified helper for SELECT queries that return multiple rows
  * @param {string} sql - Parameterized SQL query
  * @param {Array} params - Array of parameter values
  * @returns {Promise<Array>}
  */
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
+    try {
+      if (!db) {
+        return reject(new Error('Database not initialized'));
       }
-    });
+      const stmt = db.prepare(sql);
+      stmt.bind(params);
+
+      const rows = [];
+      while (stmt.step()) {
+        rows.push(stmt.getAsObject());
+      }
+      stmt.free();
+      resolve(rows);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
 /**
- * Promisified helper for db.get (retrieves a single row)
+ * Promisified helper for SELECT queries that return a single row
  * @param {string} sql - Parameterized SQL query
  * @param {Array} params - Array of parameter values
  * @returns {Promise<Object|undefined>}
  */
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
+    try {
+      if (!db) {
+        return reject(new Error('Database not initialized'));
       }
-    });
+      const stmt = db.prepare(sql);
+      stmt.bind(params);
+
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        resolve(row);
+      } else {
+        stmt.free();
+        resolve(undefined);
+      }
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
 /**
- * Promisified helper for db.run (INSERT, UPDATE, DELETE)
+ * Promisified helper for INSERT, UPDATE, DELETE statements
  * @param {string} sql - Parameterized SQL query
  * @param {Array} params - Array of parameter values
  * @returns {Promise<{ lastID: number, changes: number }>}
  */
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ lastID: this.lastID, changes: this.changes });
+    try {
+      if (!db) {
+        return reject(new Error('Database not initialized'));
       }
-    });
+      db.run(sql, params);
+
+      // Retrieve last inserted row ID and number of changed rows
+      const lastIDResult = db.exec('SELECT last_insert_rowid() AS lastID');
+      const changesResult = db.exec('SELECT changes() AS changes');
+
+      const lastID = lastIDResult.length > 0 ? lastIDResult[0].values[0][0] : 0;
+      const changes = changesResult.length > 0 ? changesResult[0].values[0][0] : 0;
+
+      // Persist changes to disk after every write operation
+      saveToDisk();
+
+      resolve({ lastID, changes });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -95,6 +153,9 @@ function run(sql, params = []) {
  */
 async function initDatabase() {
   try {
+    // Wait for sql.js to be ready and database loaded
+    await initSqlJsDatabase();
+
     // 1. Create books table if not exists
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS books (
@@ -139,14 +200,11 @@ async function initDatabase() {
   }
 }
 
-// Auto-run schema initialization
-initDatabase();
-
 module.exports = {
-  db,
+  get db() { return db; },
   query,
   get,
   run,
-  initDatabase
+  initDatabase,
+  saveToDisk
 };
-

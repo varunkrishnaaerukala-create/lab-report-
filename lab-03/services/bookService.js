@@ -54,9 +54,9 @@ class BookService {
     const conditions = [];
     const params = [];
 
-    // 1. Partial title search using SQL LIKE (case-insensitive in SQLite for ASCII)
+    // 1. Partial title search using SQL LIKE (case-insensitive)
     if (search_q && search_q.trim() !== '') {
-      conditions.push(`title LIKE ?`);
+      conditions.push(`LOWER(title) LIKE LOWER(?)`);
       params.push(`%${search_q.trim()}%`);
     }
 

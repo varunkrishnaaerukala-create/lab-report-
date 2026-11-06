@@ -6,11 +6,12 @@
  * Responsibility:
  * 1. Load configuration and environment variables via dotenv.
  * 2. Instantiate and configure Express application.
- * 3. Register global middleware (CORS, JSON parser, static assets).
- * 4. Mount API resource routes under /books.
- * 5. Register 404 not found and centralized error handling middleware.
- * 6. Start HTTP listener on configured PORT.
- * 7. Handle graceful shutdown on process termination.
+ * 3. Initialize the SQLite database schema and seed data.
+ * 4. Register global middleware (CORS, JSON parser, static assets).
+ * 5. Mount API resource routes under /books.
+ * 6. Register 404 not found and centralized error handling middleware.
+ * 7. Start HTTP listener on configured PORT.
+ * 8. Handle graceful shutdown on process termination.
  */
 
 const express = require('express');
@@ -18,7 +19,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const { db } = require('./config/database');
+const { initDatabase, saveToDisk, db } = require('./config/database');
 const bookRoutes = require('./routes/bookRoutes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
@@ -61,7 +62,12 @@ app.use(notFoundHandler);
 // Global Error Handler
 app.use(errorHandler);
 
-// Start server
+// Initialize database schema and seeds
+initDatabase().catch(err => {
+  console.error('[Database Error] Failed to initialize database:', err.message);
+});
+
+// Start HTTP server listener
 const server = app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(` Book Management API is running!`);
@@ -77,14 +83,14 @@ function gracefulShutdown(signal) {
   console.log(`\n[Server] Received ${signal}. Closing HTTP server and database...`);
   server.close(() => {
     console.log('[Server] HTTP server closed.');
-    db.close((err) => {
-      if (err) {
-        console.error('[Database Error] Error closing SQLite database:', err.message);
-      } else {
-        console.log('[Database] SQLite database connection closed cleanly.');
-      }
-      process.exit(0);
-    });
+    try {
+      saveToDisk();
+      if (db) db.close();
+      console.log('[Database] SQLite database connection closed cleanly.');
+    } catch (err) {
+      console.error('[Database Error] Error closing SQLite database:', err.message);
+    }
+    process.exit(0);
   });
 }
 
@@ -92,4 +98,3 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 module.exports = { app, server };
-
